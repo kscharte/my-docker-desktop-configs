@@ -151,6 +151,108 @@ docker exec -i kafka-connect curl -X PUT -H "Content-Type: application/json" \
 --data @- http://localhost:8083/connectors/minio-s3-sink-connector/config
 
 ```
+# Additional Commands to administer and navigate the environment
+docker exec -it postgres-db psql -U kafka_user -d postgres -c "CREATE DATABASE ordersdb;"
+
+docker exec -it postgres-db psql -U kafka_user -d ordersdb -c "
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    customer VARCHAR(255) NOT NULL,
+    order_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    amount NUMERIC(10, 2) NOT NULL
+);
+"
+
+docker exec -it postgres-db psql -U kafka_user -d ordersdb -c "
+CREATE VIEW public.orders_formatted_vw AS 
+SELECT 
+    id,
+    customer,
+    amount,
+    to_char(order_date, 'YYYY-MM-DD') AS order_date
+FROM public.orders;
+"
+
+--Data
+docker exec -it postgres-db psql -U kafka_user -d ordersdb -c "
+INSERT INTO orders (customer, order_date, amount)
+SELECT 
+    (ARRAY['Alice Smith', 'Bob Jones', 'Charlie Brown', 'Diana Prince', 'Evan Wright', 'Fiona Gallagher', 'George Clark', 'Hannah Abbot', 'Ian Malcolm', 'Julia Roberts'])[i] AS customer,
+    (CURRENT_DATE - (i || ' days')::INTERVAL)::DATE AS order_date,
+    ROUND((RANDOM() * 450 + 50)::NUMERIC, 2) AS amount
+FROM generate_series(1, 10) AS i;
+"
+
+--validate data
+docker exec -it postgres-db psql -U kafka_user ordersdb -c "select * from orders_.public.orders limit 3;"
+
+---Source-Connector
+curl -X POST -H "Content-Type: application/json" \
+--data @postgres-source.json http://localhost:8083/connectors | python -m json.tool
+
+--validation
+curl -s http://localhost:8083/connectors/postgres-db-source/status | python -m json.tool
+
+--validation configuration
+curl -s http://localhost:8083/connectors/postgres-db-source/config | python -m json.tool
+
+--restart source
+curl -X POST http://localhost:8083/connectors/postgres-db-source/restart
+
+--delete source
+curl -i -X DELETE http://localhost:8083/connectors/postgres-db-source
+
+--validate messages are streaming from worker
+docker exec -it broker-1 //opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic orders_.public.orders --from-beginning --max-messages 1
+
+--validate docker topics
+docker exec -it broker-1 //opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092
+
+--Insert additional data in postgresql
+docker exec -it postgres-db psql -U kafka_user -d ordersdb -c "INSERT INTO orders (customer,amount) VALUES ('Bondey Jones',22.75);"
+
+---Sink-Connector
+curl -X POST -H "Content-Type: application/json" \
+--data @minio-s3-sink.json http://localhost:8083/connectors | python -m json.tool
+
+--validation
+curl -s http://localhost:8083/connectors/minio-s3-sink-connector/status | python -m json.tool
+
+--validation configuration
+curl -s http://localhost:8083/connectors/minio-s3-sink-connector/config | python -m json.tool
+
+--scale out
+python -c "import sys, json; data = json.load(sys.stdin); data['config']['tasks.max'] = '3'; print(json.dumps(data['config']))" < minio-s3-sink.json | \
+docker exec -i kafka-connect curl -X PUT -H "Content-Type: application/json" \
+--data @- http://localhost:8083/connectors/minio-s3-sink-connector/config
+
+--restart sink
+curl -X POST http://localhost:8083/connectors/minio-s3-sink-connector/restart
+
+--delete source
+curl -i -X DELETE http://localhost:8083/connectors/minio-s3-sink-connector
+
+--validate messages are streaming from worker
+
+--Flush memory to force the writing to minio-s3 bucket
+curl -X PUT -H "Content-Type: application/json" \
+  -d '{
+    "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+    "tasks.max": "1",
+    "topics": "orders_.public.orders",
+    "schema.compatibility": "NONE",
+    "s3.bucket.name": "kafka-sink-bucket",
+    "s3.region": "us-east-1",
+    "store.url": "http://minio-s3:9000",
+    "aws.access.key.id": "minio_admin",
+    "aws.secret.access.key": "minio_secret_key",
+    "storage.class": "io.confluent.connect.s3.storage.S3Storage",
+    "format.class": "io.confluent.connect.s3.format.json.JsonFormat",
+    "partitioner.class": "io.confluent.connect.storage.partitioner.DefaultPartitioner",
+    "flush.size": "1",
+    "rotate.interval.ms": "10000"
+  }' http://localhost:8083/connectors/minio-s3-sink-connector/config
+
 
 ---
 
