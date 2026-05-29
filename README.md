@@ -232,8 +232,6 @@ curl -X POST http://localhost:8083/connectors/minio-s3-sink-connector/restart
 --delete source
 curl -i -X DELETE http://localhost:8083/connectors/minio-s3-sink-connector
 
---validate messages are streaming from worker
-
 --Flush memory to force the writing to minio-s3 bucket
 curl -X PUT -H "Content-Type: application/json" \
   -d '{
