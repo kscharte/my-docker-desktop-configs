@@ -196,6 +196,11 @@ curl -s http://localhost:8083/connectors/postgres-db-source/status | python -m j
 --validation configuration
 curl -s http://localhost:8083/connectors/postgres-db-source/config | python -m json.tool
 
+--update config
+python -c "import sys, json; data = json.load(sys.stdin); print(json.dumps(data['config']))" < postgres-source.json | \
+docker exec -i kafka-connect curl -X PUT -H "Content-Type: application/json" \
+--data @- http://localhost:8083/connectors/postgres-db-source/config | python -m json.tool
+
 --restart source
 curl -X POST http://localhost:8083/connectors/postgres-db-source/restart
 
@@ -225,6 +230,11 @@ curl -s http://localhost:8083/connectors/minio-s3-sink-connector/config | python
 python -c "import sys, json; data = json.load(sys.stdin); data['config']['tasks.max'] = '3'; print(json.dumps(data['config']))" < minio-s3-sink.json | \
 docker exec -i kafka-connect curl -X PUT -H "Content-Type: application/json" \
 --data @- http://localhost:8083/connectors/minio-s3-sink-connector/config
+
+--update config
+python -c "import sys, json; data = json.load(sys.stdin); print(json.dumps(data['config']))" < minio-s3-sink.json | \
+docker exec -i kafka-connect curl -X PUT -H "Content-Type: application/json" \
+--data @- http://localhost:8083/connectors/minio-s3-sink-connector/config | python -m json.tool
 
 --restart sink
 curl -X POST http://localhost:8083/connectors/minio-s3-sink-connector/restart
