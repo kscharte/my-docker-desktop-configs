@@ -184,7 +184,7 @@ FROM generate_series(1, 10) AS i;
 "
 
 --validate data
-docker exec -it postgres-db psql -U kafka_user ordersdb -c "select * from orders_.public.orders limit 3;"
+docker exec -it postgres-db psql -U kafka_user ordersdb -c "select * from public.orders limit 3;"
 
 ---Source-Connector
 curl -X POST -H "Content-Type: application/json" \
