@@ -1,0 +1,33 @@
+{
+  "name": "minio-s3-sink-connector",
+  "config": {
+    "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+    "tasks.max": "1",
+    "topics": "orders_.public.orders",
+    "schema.compatibility": "NONE",
+    "s3.bucket.name": "kafka-sink-bucket",
+    "s3.region": "us-east-1",
+    "store.url": "http://minio-s3:9000",
+    "aws.access.key.id": "minio_admin",
+    "aws.secret.access.key": "minio_secret_key",
+    "storage.class": "io.confluent.connect.s3.storage.S3Storage",
+    "format.class": "io.confluent.connect.s3.format.json.JsonFormat",
+    "partitioner.class": "io.confluent.connect.storage.partitioner.DefaultPartitioner",
+    "flush.size": "1",
+    "rotate.interval.ms": "10000",
+    "s3.part.size": "5242880",
+    "consumer.max.poll.interval.ms": "300000",
+    "consumer.session.timeout.ms": "45000",
+    "errors.tolerance": "all",
+    "errors.deadletterqueue.topic.name": "dlq_topic",
+    "transforms": "unwrap,formatDate",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "true",
+    "transforms.formatDate.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
+    "transforms.formatDate.field": "order_date", 
+    "transforms.formatDate.target.type": "string",
+    "transforms.formatDate.format.string": "yyyy-MM-dd",
+    "transforms.formatDate.type.name": "Date",
+    "transforms.formatDate.format": "yyyy-MM-dd"
+  }
+}
